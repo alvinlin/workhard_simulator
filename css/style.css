@@ -265,6 +265,114 @@ body { display: flex; flex-direction: column; }
 .status-branch { font-weight: 500; }
 .st-err, .st-warn { display: inline-flex; gap: 2px; align-items: center; }
 
+/* ===== Scene switching ===== */
+.scene { display: flex; flex-direction: column; height: 100%; flex: 1 1 auto; min-height: 0; }
+.scene-hidden { display: none !important; }
+body { display: flex; flex-direction: column; }
+
+/* ============================================================ */
+/*  Claude Code CLI scene                                       */
+/* ============================================================ */
+:root {
+  --claude: #d97757;          /* Claude accent (terracotta) */
+  --claude-dim: #b9684c;
+  --cli-bg: #1a1614;
+  --cli-fg: #d8d2cb;
+  --cli-green: #56b78b;
+}
+#scene-claude { background: var(--cli-bg); }
+
+.cli-titlebar {
+  height: 32px; background: #2a2522; flex: 0 0 auto;
+  display: flex; align-items: center; font-size: 12px; color: #cbb;
+}
+.cli-tab {
+  height: 32px; display: flex; align-items: center; gap: 8px;
+  padding: 0 16px; background: var(--cli-bg); color: #e8ddd5;
+  border-top: 2px solid var(--claude);
+}
+.cli-tab-ico { color: var(--claude); }
+.cli-tab-add { padding: 0 12px; color: #998; }
+.cli-spacer { flex: 1; }
+.cli-titlebar .win-btn { color: #cbb; }
+
+.cli-log {
+  flex: 1 1 auto; overflow-y: auto; min-height: 0;
+  font-family: var(--mono); font-size: 14px; line-height: 1.55;
+  color: var(--cli-fg); padding: 16px 22px 8px;
+}
+.cli-log::-webkit-scrollbar { width: 12px; }
+.cli-log::-webkit-scrollbar-thumb { background: #4a4038; border-radius: 6px; }
+.cli-log > div { margin: 1px 0; white-space: pre-wrap; word-break: break-word; }
+
+/* welcome box */
+.cli-welcome {
+  border: 1px solid var(--claude); border-radius: 8px;
+  padding: 12px 16px; margin: 4px 0 14px; max-width: 620px;
+}
+.cw-title { font-size: 14px; color: #f0e6df; margin-bottom: 8px; }
+.cw-star { color: var(--claude); }
+.cw-sub { color: #9a8f86; font-size: 13px; }
+.cw-cwd { color: #7d736b; font-size: 13px; margin-top: 6px; }
+.cli-tipline { color: #8a7f76; font-size: 13px; margin-bottom: 10px !important; }
+.cli-idleline { color: var(--claude); margin-top: 12px !important; }
+
+/* user prompt echoed into the log */
+.cli-user { margin-top: 14px !important; }
+.cli-user .cli-gt { color: var(--claude); }
+.cli-usertext { color: #efe7e0; }
+
+/* thinking spinner */
+.cli-think { color: var(--claude); }
+.th-star { color: var(--claude); display: inline-block; }
+.th-meta { color: #8a7f76; }
+
+/* assistant prose */
+.cli-assistant { margin: 4px 0; }
+.ab-dot { color: var(--claude); }
+.ab-text { color: var(--cli-fg); }
+
+/* tool calls */
+.cli-tool { margin-top: 6px !important; }
+.tc-dot { color: var(--cli-green); }
+.tc-name { color: #e8ddd5; font-weight: 600; }
+.tc-paren { color: #8a7f76; }
+.tc-arg { color: #8fb6d6; }
+.tc-desc { color: #8a7f76; }
+.cli-result { color: #9a8f86; }
+.tc-tree { color: #6a6058; }
+.tc-run { color: #8a7f76; font-style: italic; }
+.r-ok, .tc-result .r-ok { color: var(--cli-green); }
+.r-add { color: var(--cli-green); }
+.r-dim { color: #8a7f76; }
+.r-err { color: #e06c5b; }
+
+.cli-doneline { color: #6f7d6a; font-size: 13px; margin: 8px 0 4px !important; }
+
+/* bottom input box */
+.cli-bottom { flex: 0 0 auto; padding: 8px 16px 14px; }
+.cli-input {
+  border: 1px solid #4a4038; border-radius: 10px;
+  padding: 10px 14px; font-family: var(--mono); font-size: 14px;
+  color: var(--cli-fg); display: flex; align-items: center; gap: 8px;
+  background: #211c19;
+}
+.cli-input.focus { border-color: var(--claude); }
+.cli-input .cli-gt { color: var(--claude); }
+.cli-input.empty .cli-text::after {
+  content: "Try \"refactor the auth service\"…"; color: #6a6058;
+}
+.cli-text { color: #efe7e0; white-space: pre; }
+.cli-caret {
+  display: inline-block; width: 8px; height: 16px; background: var(--claude);
+  margin-bottom: -2px; animation: blink 1s steps(1) infinite;
+}
+.cli-hint {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 12px; color: #6a6058;
+  padding: 6px 4px 0;
+}
+
 /* ===== Control overlay ===== */
 .controls {
   position: fixed; top: 42px; right: 16px; width: 260px;
@@ -282,6 +390,17 @@ body { display: flex; flex-direction: column; }
 .controls-collapse { cursor: pointer; color: var(--text-dim); padding: 0 4px; }
 .controls-collapse:hover { color: #fff; }
 .controls-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.scn-select {
+  display: flex; gap: 4px; background: #1b1b1b; padding: 3px;
+  border-radius: 6px; border: 1px solid #3c3c3c;
+}
+.scn-opt {
+  flex: 1; padding: 7px 4px; border: none; border-radius: 4px;
+  background: transparent; color: #aaa; font-size: 12px; cursor: pointer;
+  font-family: var(--ui);
+}
+.scn-opt:hover { color: #fff; }
+.scn-opt.active { background: var(--accent); color: #fff; font-weight: 600; }
 .controls.collapsed .controls-body { display: none; }
 .ctrl-btn {
   width: 100%; padding: 8px; border: 1px solid #3c3c3c; border-radius: 5px;

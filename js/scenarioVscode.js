@@ -1,12 +1,14 @@
-/* WorkHard Simulator — drives the fake VS Code "intense coding" session. */
+/* Scenario: Visual Studio Code — auto-plays an intense coding session.
+   Registers itself with the shared Sim core (js/core.js).                  */
 (function () {
   "use strict";
 
   const files = window.CODE_FILES;
   const { highlightLine } = window.Highlighter;
+  const sleep = (ms, my) => Sim.sleep(ms, my);
+  const $ = (id) => document.getElementById(id);
 
   // ---- DOM refs ----
-  const $ = (id) => document.getElementById(id);
   const codeArea = $("codeArea");
   const editor = $("editor");
   const minimap = $("minimap");
@@ -15,38 +17,21 @@
   const terminalEl = $("terminal");
   const breadcrumbFile = $("bcFile");
   const windowTitle = $("windowTitle");
-
-  const stPos = $("stPos");
-  const stLang = $("stLang");
-  const stErr = $("stErr");
-  const stWarn = $("stWarn");
-  const stSync = $("stSync");
+  const stPos = $("stPos"), stLang = $("stLang");
+  const stErr = $("stErr"), stWarn = $("stWarn"), stSync = $("stSync");
   const panelProblems = $("panelProblems");
-
-  const btnToggle = $("btnToggle");
-  const btnFull = $("btnFull");
-  const speedEl = $("speed");
-  const speedVal = $("speedVal");
-  const optTerminal = $("optTerminal");
-  const optTypos = $("optTypos");
-  const controls = $("controls");
-  const controlsCollapse = $("controlsCollapse");
+  const optTerminal = $("optTerminal"), optTypos = $("optTypos");
 
   const LANG_LABEL = {
-    javascript: "JavaScript", typescript: "TypeScript",
-    python: "Python", go: "Go",
+    javascript: "JavaScript", typescript: "TypeScript", python: "Python", go: "Go",
   };
   const ICON_COLOR = { JS: "#e8d44d", TS: "#3b9eff", PY: "#4b8bbe", GO: "#00add8" };
 
-  // ---- runtime state ----
-  let running = false;
-  let paused = false;       // true while user stopped; loop parks itself
-  let runId = 0;            // bumped to cancel an in-flight session
-  let speed = parseFloat(speedEl.value);
   let stats = { errors: 0, warnings: 0, ahead: 0 };
+  let activeIdx = 0;
 
   // ============================================================
-  //  Build the static chrome (file tree + tabs)
+  //  Static chrome
   // ============================================================
   function buildChrome() {
     fileTreeEl.innerHTML = "";
@@ -80,30 +65,9 @@
   }
 
   // ============================================================
-  //  Cancellable, pause-aware, speed-aware wait
-  // ============================================================
-  function sleep(ms, myRun) {
-    return new Promise((resolve, reject) => {
-      let remaining = ms / speed;
-      const tick = () => {
-        if (myRun !== runId) return reject("cancelled");
-        if (paused) { setTimeout(tick, 80); return; }
-        const step = Math.min(remaining, 40);
-        remaining -= step;
-        if (remaining <= 0) resolve();
-        else setTimeout(tick, step);
-      };
-      tick();
-    });
-  }
-
-  // ============================================================
   //  Editor rendering
   // ============================================================
-  let curLineEl = null;     // <div.line> currently being typed
-  let curTextEl = null;     // its .ln-text span
-  let lineCount = 0;
-  let blockState = {};       // multi-line highlight state (block comments)
+  let curLineEl = null, curTextEl = null, lineCount = 0, blockState = {}, curRaw = "";
 
   function resetEditor() {
     codeArea.innerHTML = "";
@@ -114,7 +78,6 @@
   }
 
   function newLine(text) {
-    // finalize previous current-line styling
     if (curLineEl) curLineEl.classList.remove("cur");
     lineCount++;
     const line = document.createElement("div");
@@ -133,15 +96,11 @@
     addMinimapLine(text || "");
   }
 
-  let curRaw = "";
   function renderCurrentLine(raw, withCaret) {
     curRaw = raw;
-    const lang = files[activeIdx].lang;
-    const { html, state } = highlightLine(raw, lang, blockState);
+    const { html, state } = highlightLine(raw, files[activeIdx].lang, blockState);
     curTextEl.innerHTML = html + (withCaret ? '<span class="caret"></span>' : "");
-    // commit block-comment state only when the line is "done"
     if (!withCaret) blockState = state;
-    // keep caret line in view
     const lineTop = curLineEl.offsetTop;
     const viewTop = editor.scrollTop;
     const viewBot = viewTop + editor.clientHeight;
@@ -157,7 +116,6 @@
     bar.style.width = Math.max(2, len * 1.1) + "px";
     const indent = text.match(/^\s*/)[0].length;
     bar.style.marginLeft = Math.min(indent * 1.1, 24) + "px";
-    // colour roughly by content
     let c = "#3a3a3a";
     if (/^\s*(\/\/|#|\/\*|\*)/.test(text)) c = "#2f4030";
     else if (/["'`]/.test(text)) c = "#4a3b33";
@@ -173,15 +131,15 @@
   const FAST = new Set(" .,;:(){}[]=>".split(""));
 
   function charDelay(ch, prev) {
-    let base = 22 + Math.random() * 55;          // ~baseline cadence
-    if (FAST.has(ch)) base *= 0.55;              // burst through punctuation
-    if (ch === " " && prev === " ") base *= 0.3; // indentation flies by
-    if (".!?".includes(prev)) base += 120;       // think after sentences
-    if (Math.random() < 0.018) base += 350 + Math.random() * 900; // occasional pondering
+    let base = 22 + Math.random() * 55;
+    if (FAST.has(ch)) base *= 0.55;
+    if (ch === " " && prev === " ") base *= 0.3;
+    if (".!?".includes(prev)) base += 120;
+    if (Math.random() < 0.018) base += 350 + Math.random() * 900;
     return base;
   }
 
-  async function typeFile(idx, myRun) {
+  async function typeFile(idx, my) {
     activeIdx = idx;
     setActiveFile(idx);
     resetEditor();
@@ -194,62 +152,49 @@
       const target = lines[li];
       newLine("");
       let typed = "";
-
       let c = 0;
       while (c < target.length) {
         const ch = target[c];
-
-        // occasional typo on word characters, then a corrective backspace burst
         if (optTypos.checked && /[a-z]/.test(ch) && Math.random() < 0.015) {
           const wrong = "asdfghjklqwertyuiop"[Math.floor(Math.random() * 19)];
           renderCurrentLine(typed + wrong, true);
           updateCursor(li + 1, typed.length + 2);
-          await sleep(charDelay(wrong, prev), myRun);
-          await sleep(150 + Math.random() * 250, myRun); // notice the mistake
-          renderCurrentLine(typed, true);                // backspace
-          await sleep(90, myRun);
+          await sleep(charDelay(wrong, prev), my);
+          await sleep(150 + Math.random() * 250, my);
+          renderCurrentLine(typed, true);
+          await sleep(90, my);
         }
-
         typed += ch;
         renderCurrentLine(typed, true);
         updateCursor(li + 1, typed.length + 1);
-        await sleep(charDelay(ch, prev), myRun);
+        await sleep(charDelay(ch, prev), my);
         prev = ch;
         c++;
       }
-      renderCurrentLine(typed, false); // finalize line (caret removed)
+      renderCurrentLine(typed, false);
 
-      // pause at end of line — longer after blank lines / block ends
       let endPause = 30 + Math.random() * 70;
       if (target.trim() === "" || target.trim() === "}") endPause += 120;
       if (/\{$/.test(target.trim())) endPause += 60;
-      await sleep(endPause, myRun);
-
+      await sleep(endPause, my);
       maybeJitterProblems();
     }
 
-    // file finished -> "save"
-    await sleep(400, myRun);
+    await sleep(400, my);
     markTabDirty(idx, false);
     flashSaved();
   }
 
-  let activeIdx = 0;
-
-  function updateCursor(line, col) {
-    stPos.textContent = `Ln ${line}, Col ${col}`;
-  }
+  function updateCursor(line, col) { stPos.textContent = `Ln ${line}, Col ${col}`; }
 
   // ============================================================
-  //  Status bar churn (problems counter feels alive)
+  //  Status bar churn
   // ============================================================
   function maybeJitterProblems() {
-    if (Math.random() < 0.06) {
+    if (Math.random() < 0.06)
       stats.warnings = Math.max(0, stats.warnings + (Math.random() < 0.5 ? 1 : -1));
-    }
-    if (Math.random() < 0.03) {
+    if (Math.random() < 0.03)
       stats.errors = Math.max(0, stats.errors + (Math.random() < 0.6 ? 1 : -1));
-    }
     renderStats();
   }
   function renderStats() {
@@ -257,7 +202,6 @@
     stWarn.textContent = stats.warnings;
     panelProblems.textContent = stats.errors + stats.warnings;
   }
-  let saveTimer = null;
   function flashSaved() {
     stats.ahead++;
     stSync.innerHTML = `&#8635; 0&#8595; ${stats.ahead}&#8593;`;
@@ -273,11 +217,9 @@
     terminalEl.scrollTop = terminalEl.scrollHeight;
     return span;
   }
-  function clearCaret() {
-    terminalEl.querySelectorAll(".t-caret").forEach((c) => c.remove());
-  }
+  function clearCaret() { terminalEl.querySelectorAll(".t-caret").forEach((c) => c.remove()); }
 
-  async function typeCommand(cmd, myRun) {
+  async function typeCommand(cmd, my) {
     clearCaret();
     const promptHtml = '<span class="t-path">PS C:\\dev\\workhard-simulator</span> <span class="t-branch">(main)</span><span class="t-prompt">&gt;</span> ';
     const line = termWrite(promptHtml + '<span class="cmd"></span><span class="t-caret"></span>');
@@ -285,167 +227,106 @@
     for (const ch of cmd) {
       cmdSpan.textContent += ch;
       terminalEl.scrollTop = terminalEl.scrollHeight;
-      await sleep(35 + Math.random() * 45, myRun);
+      await sleep(35 + Math.random() * 45, my);
     }
     line.querySelector(".t-caret")?.remove();
     return line;
   }
 
-  // a pool of believable command runs
   function commandRuns() {
     const branch = ["feat/auth-tokens", "fix/rate-limit", "chore/metrics", "main"][Math.floor(Math.random() * 4)];
     return [
-      {
-        cmd: "git status",
-        out: [
-          'On branch <span class="t-branch">' + branch + "</span>",
-          'Changes not staged for commit:',
-          '  <span class="t-warn">modified:   ' + files[activeIdx].name + "</span>",
-          'no changes added to commit (use "git add")',
-        ],
-      },
-      {
-        cmd: "npm test",
-        out: [
-          '<span class="t-dim">&gt; jest --runInBand</span>',
-          "",
-          '<span class="t-ok"> PASS </span> tests/auth.service.test.js',
-          '<span class="t-ok"> PASS </span> tests/pipeline.test.js',
-          '<span class="t-ok"> PASS </span> tests/rateLimiter.test.js',
-          '<span class="t-ok">Test Suites: 3 passed, 3 total</span>',
-          '<span class="t-ok">Tests:       27 passed, 27 total</span>',
-          '<span class="t-dim">Time:        2.8 s</span>',
-        ],
-      },
-      {
-        cmd: "git add -A && git commit -m \"refactor: tighten token validation\"",
-        out: [
-          '<span class="t-branch">[' + branch + ' 4f2a9c1]</span> refactor: tighten token validation',
-          ' <span class="t-info">3 files changed, 48 insertions(+), 12 deletions(-)</span>',
-        ],
-      },
-      {
-        cmd: "npm run build",
-        out: [
-          '<span class="t-dim">vite v5.2.0 building for production...</span>',
-          "&#10003; 412 modules transformed.",
-          '<span class="t-info">dist/assets/index-8f3c1.js   142.6 kB &#9474; gzip: 46.1 kB</span>',
-          '<span class="t-ok">&#10003; built in 3.41s</span>',
-        ],
-      },
-      {
-        cmd: "git push origin " + branch,
-        out: [
-          '<span class="t-dim">Enumerating objects: 14, done.</span>',
-          '<span class="t-dim">Writing objects: 100% (8/8), 1.21 KiB</span>',
-          'To github.com:acme/workhard-simulator.git',
-          '<span class="t-ok">   3a1f0c2..4f2a9c1  ' + branch + " -> " + branch + "</span>",
-        ],
-      },
-      {
-        cmd: "npx tsc --noEmit",
-        out: ['<span class="t-ok">No type errors found.</span>'],
-      },
+      { cmd: "git status", out: [
+        'On branch <span class="t-branch">' + branch + "</span>",
+        "Changes not staged for commit:",
+        '  <span class="t-warn">modified:   ' + files[activeIdx].name + "</span>",
+        'no changes added to commit (use "git add")' ] },
+      { cmd: "npm test", out: [
+        '<span class="t-dim">&gt; jest --runInBand</span>', "",
+        '<span class="t-ok"> PASS </span> tests/auth.service.test.js',
+        '<span class="t-ok"> PASS </span> tests/pipeline.test.js',
+        '<span class="t-ok"> PASS </span> tests/rateLimiter.test.js',
+        '<span class="t-ok">Test Suites: 3 passed, 3 total</span>',
+        '<span class="t-ok">Tests:       27 passed, 27 total</span>',
+        '<span class="t-dim">Time:        2.8 s</span>' ] },
+      { cmd: "git add -A && git commit -m \"refactor: tighten token validation\"", out: [
+        '<span class="t-branch">[' + branch + ' 4f2a9c1]</span> refactor: tighten token validation',
+        ' <span class="t-info">3 files changed, 48 insertions(+), 12 deletions(-)</span>' ] },
+      { cmd: "npm run build", out: [
+        '<span class="t-dim">vite v5.2.0 building for production...</span>',
+        "&#10003; 412 modules transformed.",
+        '<span class="t-info">dist/assets/index-8f3c1.js   142.6 kB &#9474; gzip: 46.1 kB</span>',
+        '<span class="t-ok">&#10003; built in 3.41s</span>' ] },
+      { cmd: "git push origin " + branch, out: [
+        '<span class="t-dim">Enumerating objects: 14, done.</span>',
+        '<span class="t-dim">Writing objects: 100% (8/8), 1.21 KiB</span>',
+        "To github.com:acme/workhard-simulator.git",
+        '<span class="t-ok">   3a1f0c2..4f2a9c1  ' + branch + " -> " + branch + "</span>" ] },
+      { cmd: "npx tsc --noEmit", out: ['<span class="t-ok">No type errors found.</span>'] },
     ];
   }
 
-  async function runTerminal(myRun) {
+  async function runTerminal(my) {
     if (!optTerminal.checked) return;
     const run = commandRuns()[Math.floor(Math.random() * 6)];
-    await typeCommand(run.cmd, myRun);
-    await sleep(300, myRun);
+    await typeCommand(run.cmd, my);
+    await sleep(300, my);
     for (const l of run.out) {
       termWrite(l || "&nbsp;");
-      await sleep(90 + Math.random() * 160, myRun);
+      await sleep(90 + Math.random() * 160, my);
     }
-    if (run.cmd.startsWith("git push")) { stats.ahead = 0; stSync.innerHTML = "&#8635; 0&#8595; 0&#8593;"; }
+    if (run.cmd.startsWith("git push")) {
+      stats.ahead = 0; stSync.innerHTML = "&#8635; 0&#8595; 0&#8593;";
+    }
     termWrite('<span class="t-path">PS C:\\dev\\workhard-simulator</span> <span class="t-branch">(main)</span><span class="t-prompt">&gt;</span> <span class="t-caret"></span>');
     terminalEl.scrollTop = terminalEl.scrollHeight;
   }
 
   // ============================================================
-  //  Main session loop
+  //  Run loop + idle reset
   // ============================================================
-  async function session(myRun) {
-    // initial terminal greeting
+  async function run(my) {
     terminalEl.innerHTML = "";
     termWrite('<span class="t-dim">PowerShell 7.4.1 — type a command, or just look busy.</span>');
     termWrite('<span class="t-path">PS C:\\dev\\workhard-simulator</span> <span class="t-branch">(main)</span><span class="t-prompt">&gt;</span> <span class="t-caret"></span>');
 
     let order = 0;
-    try {
-      while (myRun === runId) {
-        const idx = order % files.length;
-        await typeFile(idx, myRun);
-        await sleep(500, myRun);
-        if (Math.random() < 0.7) await runTerminal(myRun);
-        await sleep(700, myRun);
-        order++;
-      }
-    } catch (e) {
-      if (e !== "cancelled") console.error(e);
+    while (my === Sim.runId) {
+      await typeFile(order % files.length, my);
+      await sleep(500, my);
+      if (Math.random() < 0.7) await runTerminal(my);
+      await sleep(700, my);
+      order++;
     }
   }
 
-  // ============================================================
-  //  Controls
-  // ============================================================
-  function start() {
-    running = true;
-    paused = false;
-    runId++;
-    btnToggle.innerHTML = "&#10073;&#10073; Stop working";
-    btnToggle.classList.add("running");
-    session(runId);
-  }
-  function stop() {
-    running = false;
-    runId++; // cancels the in-flight session
-    btnToggle.innerHTML = "&#9658; Start working";
-    btnToggle.classList.remove("running");
+  function reset() {
+    setActiveFile(0);
+    renderStats();
+    resetEditor();
+    newLine("// Press ▶ Start working — or hit Space — to begin the grind.");
+    curLineEl.classList.remove("cur");
   }
 
-  btnToggle.addEventListener("click", () => (running ? stop() : start()));
-
-  speedEl.addEventListener("input", () => {
-    speed = parseFloat(speedEl.value);
-    speedVal.innerHTML = speed.toFixed(1) + "&times;";
-  });
-
-  btnFull.addEventListener("click", () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-    else document.exitFullscreen?.();
-  });
-
-  controlsCollapse.addEventListener("click", () => controls.classList.toggle("collapsed"));
-
-  // Boss key: hide the control panel entirely
-  document.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "INPUT") return;
-    if (e.key === "b" || e.key === "B") controls.classList.toggle("hidden");
-    if (e.key === " ") { e.preventDefault(); running ? stop() : start(); }
-  });
-
-  // Let tree / tab clicks jump to a file even mid-session
+  // ============================================================
+  //  Jump-to-file (click a tab / tree item while running)
+  // ============================================================
   function jumpTo(idx) {
-    if (!running) { setActiveFile(idx); return; }
-    runId++;                 // cancel current typing
-    const my = runId;
+    if (!Sim.state.running) { activeIdx = idx; setActiveFile(idx); reset(); return; }
+    const my = Sim.bumpRun();
     (async () => {
       try {
         await typeFile(idx, my);
         await sleep(500, my);
-        // resume rolling session from the next file
         let order = idx + 1;
-        while (my === runId) {
-          const i = order % files.length;
+        while (my === Sim.runId) {
           await sleep(400, my);
           if (Math.random() < 0.7) await runTerminal(my);
           await sleep(600, my);
-          await typeFile(i, my);
+          await typeFile(order % files.length, my);
           order++;
         }
-      } catch (_) { /* cancelled */ }
+      } catch (e) { if (e !== "cancelled") console.error(e); }
     })();
   }
   fileTreeEl.addEventListener("click", (e) => {
@@ -455,12 +336,12 @@
     const t = e.target.closest(".tab"); if (t) jumpTo(+t.dataset.idx);
   });
 
-  // ---- boot ----
+  // ---- register ----
   buildChrome();
-  setActiveFile(0);
-  renderStats();
-  // seed a tiny preview so the editor isn't blank before "Start"
-  resetEditor();
-  newLine("// Press ▶ Start working — or hit Space — to begin the grind.");
-  curLineEl.classList.remove("cur");
+  Sim.register("vscode", {
+    label: "VS Code",
+    root: document.getElementById("scene-vscode"),
+    run,
+    reset,
+  });
 })();
