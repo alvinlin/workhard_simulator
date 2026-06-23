@@ -122,6 +122,13 @@
   </div>
 
   <!-- ============================================================ -->
+  <!--  SCENE 3 — OS Update (Windows / macOS)                       -->
+  <!-- ============================================================ -->
+  <div id="scene-osupdate" class="scene scene-hidden">
+    <div class="osu-stage" id="osuStage"></div>
+  </div>
+
+  <!-- ============================================================ -->
   <!--  Shared control overlay                                      -->
   <!-- ============================================================ -->
   <div class="controls" id="controls">
@@ -133,6 +140,11 @@
       <div class="scn-select">
         <button class="scn-opt active" data-scn="vscode">&#9638; VS Code</button>
         <button class="scn-opt" data-scn="claude">&#10022; Claude Code</button>
+        <button class="scn-opt" data-scn="osupdate">&#8635; OS Update</button>
+      </div>
+      <div class="os-select opt-osupdate">
+        <button class="os-opt active" data-os="windows">&#8862; Windows</button>
+        <button class="os-opt" data-os="macos">&#9673; macOS</button>
       </div>
       <button class="ctrl-btn primary" id="btnToggle">&#9658; Start working</button>
       <label class="ctrl-row">
@@ -156,6 +168,7 @@
   <script src="js/codeSamples.js"></script>
   <script src="js/scenarioVscode.js"></script>
   <script src="js/scenarioClaude.js"></script>
+  <script src="js/scenarioOsupdate.js"></script>
   <script src="js/boot.js"></script>
 </body>
 </html>

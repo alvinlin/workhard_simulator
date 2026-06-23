@@ -373,6 +373,56 @@ body { display: flex; flex-direction: column; }
   padding: 6px 4px 0;
 }
 
+/* ============================================================ */
+/*  OS Update scene (Windows / macOS)                           */
+/* ============================================================ */
+.osu-stage {
+  position: relative;
+  flex: 1 1 auto; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 26px; text-align: center;
+  font-family: "Segoe UI Variable", var(--ui);
+}
+.osu-win   { background: #0a64ba; color: #fff; }
+.osu-mac   { background: #000; color: #e8e8e8; }
+.osu-black { background: #000; }
+
+/* Windows dot throbber */
+.osu-spinner { position: relative; width: 64px; height: 64px; animation: osu-rot 1.4s linear infinite; }
+.osu-spinner i {
+  position: absolute; top: 50%; left: 50%;
+  width: 7px; height: 7px; margin: -3.5px; border-radius: 50%; background: #fff;
+}
+@keyframes osu-rot { to { transform: rotate(360deg); } }
+
+.osu-heading { font-size: 28px; font-weight: 400; letter-spacing: .5px; }
+.osu-pct { font-size: 20px; font-weight: 300; opacity: .95; min-height: 24px; }
+.osu-sub { font-size: 15px; opacity: .85; max-width: 560px; line-height: 1.6; }
+.osu-meta { position: absolute; bottom: 26px; font-size: 12px; opacity: .6; }
+
+/* macOS Apple logo + progress bar */
+.osu-apple { width: 88px; height: 88px; fill: #e8e8e8; }
+.osu-bar {
+  width: 300px; height: 6px; border-radius: 3px;
+  background: #3a3a3a; overflow: hidden;
+}
+.osu-bar i { display: block; height: 100%; width: 0; background: #e8e8e8; border-radius: 3px; transition: width .3s ease; }
+.osu-remain { font-size: 13px; color: #9a9a9a; min-height: 18px; }
+
+/* OS sub-selector in the overlay */
+.os-select {
+  display: flex; gap: 4px; background: #1b1b1b; padding: 3px;
+  border-radius: 6px; border: 1px solid #3c3c3c;
+}
+.os-opt {
+  flex: 1; padding: 6px 4px; border: none; border-radius: 4px;
+  background: transparent; color: #aaa; font-size: 12px; cursor: pointer;
+  font-family: var(--ui);
+}
+.os-opt:hover { color: #fff; }
+.os-opt.active { background: #555; color: #fff; font-weight: 600; }
+
 /* ===== Control overlay ===== */
 .controls {
   position: fixed; top: 42px; right: 16px; width: 260px;

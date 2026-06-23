@@ -14,6 +14,10 @@ the screen busy itself.
 - **Claude Code** — a Claude Code CLI session: a typed user prompt, a "thinking"
   spinner with a token counter, streamed assistant prose, and green-bulleted
   tool calls (Read / Edit / Bash / …) with `⎿` tree-connector results.
+- **OS Update** — a full-screen *"installing updates"* screen you can switch
+  between **Windows** (blue, dot throbber, "已完成 NN%") and **macOS** (black,
+  Apple logo, thin progress bar). It crawls and stalls to 100%, "restarts", then
+  loops with the next version.
 
 Scenarios are swappable modules registered against a shared core, so adding more
 (debugging, writing docs, etc.) is just a matter of dropping in another scenario
@@ -33,7 +37,8 @@ Node is only used for sanity checks, e.g. `node --check js/app.js`.
 
 The floating overlay lets you:
 
-- **Switch scenario** — VS Code ↔ Claude Code.
+- **Switch scenario** — VS Code · Claude Code · OS Update (with a Windows/macOS
+  sub-toggle when OS Update is active).
 - **Start / Stop** the active scene (or hit <kbd>Space</kbd>).
 - **Adjust speed** and **pause**.
 
@@ -45,18 +50,19 @@ animation module that registers itself.
 
 | File | Role |
 |------|------|
-| `index.html` | Hosts both scenes (`#scene-vscode`, `#scene-claude`) and the shared control overlay. Script load order matters. |
-| `css/style.css` | Dark+ (VS Code) + terracotta (Claude CLI) themes. All colors are CSS variables at `:root`. |
+| `index.html` | Hosts the scenes (`#scene-vscode`, `#scene-claude`, `#scene-osupdate`) and the shared control overlay. Script load order matters. |
+| `css/style.css` | Dark+ (VS Code) + terracotta (Claude CLI) + OS-update themes. All colors are CSS variables at `:root`. |
 | `js/core.js` | `window.Sim` — the shared runtime: cancellable `sleep`, `runId` token, speed/pause, control wiring, and the scenario registry + switcher. |
 | `js/highlight.js` | `window.Highlighter.highlightLine(line, lang, state)` — per-line tokenizer → HTML-escaped `<span class="tok-*">`. |
 | `js/codeSamples.js` | `window.CODE_FILES` — source files the VS Code scenario types. |
 | `js/scenarioVscode.js` | VS Code scenario: typing loop, fake terminal, status-bar churn. |
 | `js/scenarioClaude.js` | Claude Code CLI scenario: prompt typing, thinking spinner, streamed text, tool calls. |
+| `js/scenarioOsupdate.js` | OS Update scenario: Windows/macOS update screens + the Windows↔macOS sub-toggle. |
 | `js/boot.js` | Calls `Sim.boot("vscode")` after all scenarios have registered. |
 
 **Load order** (core first, boot last):
 `core.js` → `highlight.js` → `codeSamples.js` → `scenarioVscode.js`
-→ `scenarioClaude.js` → `boot.js`.
+→ `scenarioClaude.js` → `scenarioOsupdate.js` → `boot.js`.
 
 ### Adding a scenario
 

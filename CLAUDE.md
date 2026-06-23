@@ -13,6 +13,9 @@ from the floating control panel:
 - **Claude Code** — a Claude Code CLI session: a typed user prompt, a "thinking"
   spinner with token counter, streamed assistant prose, and green-bulleted tool
   calls (Read/Edit/Bash/…) with `⎿` tree-connector results.
+- **OS Update** — a full-screen "installing updates" screen, switchable between a
+  Windows style (blue, dot throbber, "已完成 NN%") and a macOS style (black, Apple
+  logo, thin progress bar). Crawls/stalls to 100%, "restarts", then loops.
 
 Scenarios are swappable modules registered against a shared core, so adding more
 (debugging, writing docs, etc.) is a matter of dropping in another scenario file.
@@ -35,18 +38,19 @@ animation module that registers itself.
 
 | File | Role |
 |------|------|
-| `index.html` | Hosts both scenes (`#scene-vscode`, `#scene-claude`) and the shared control overlay. Script load order matters (see below). |
-| `css/style.css` | Dark+ (VS Code) + terracotta (Claude CLI) themes. All colors are CSS variables at `:root`. |
+| `index.html` | Hosts the scenes (`#scene-vscode`, `#scene-claude`, `#scene-osupdate`) and the shared control overlay. Script load order matters (see below). |
+| `css/style.css` | Dark+ (VS Code) + terracotta (Claude CLI) + OS-update themes. All colors are CSS variables at `:root`. |
 | `js/core.js` | `window.Sim` — the shared runtime: cancellable `sleep`, `runId` token, speed/pause, control wiring, and the scenario registry + switcher. |
 | `js/highlight.js` | `window.Highlighter.highlightLine(line, lang, state)` — per-line tokenizer → HTML-escaped `<span class="tok-*">`. `state` carries block-comment context. (VS Code scenario.) |
 | `js/codeSamples.js` | `window.CODE_FILES` — source files the VS Code scenario types. Each: `{ name, icon, lang, code }`. |
 | `js/scenarioVscode.js` | VS Code scenario: typing loop, fake terminal, status-bar churn. |
 | `js/scenarioClaude.js` | Claude Code CLI scenario: prompt typing, thinking spinner, streamed text, tool calls. Conversation lives in the `TURNS` array. |
+| `js/scenarioOsupdate.js` | OS Update scenario: Windows/macOS full-screen update screens, the percentage/progress model, and the Windows↔macOS `.os-opt` sub-toggle. |
 | `js/boot.js` | Calls `Sim.boot("vscode")` after all scenarios have registered. |
 
 Load order: `core.js` → `highlight.js` → `codeSamples.js` → `scenarioVscode.js`
-→ `scenarioClaude.js` → `boot.js`. Core must be first (scenarios call
-`Sim.register`); boot must be last.
+→ `scenarioClaude.js` → `scenarioOsupdate.js` → `boot.js`. Core must be first
+(scenarios call `Sim.register`); boot must be last.
 
 ### The core (`js/core.js`)
 
@@ -72,6 +76,11 @@ Load order: `core.js` → `highlight.js` → `codeSamples.js` → `scenarioVscod
 - **Claude CLI** drives the scripted `TURNS` array (prompt → think → actions).
   Tool `result` strings are intentional HTML (colored via `.r-*` classes) and are
   **not** escaped; the prompt, user echo, and tool `arg` **are** escaped.
+- **OS Update** renders `#osuStage` from JS per the module-level `os` flag
+  (`"windows"`/`"macos"`). `nextPct`/`stallMs` give the crawl-and-stall feel; the
+  Windows↔macOS `.os-opt` buttons (shown only while active, like `.opt-vscode`)
+  restart the run via `Sim.stop(); Sim.start()` so the new OS takes effect. The
+  Apple mark is an inline SVG (the `` PUA glyph won't render on Windows).
 
 ## Conventions
 

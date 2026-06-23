@@ -74,8 +74,12 @@ window.Sim = (function () {
     for (const k of order) scenarios[k].root.classList.toggle("scene-hidden", k !== id);
     document.body.classList.toggle("mode-claude", id === "claude");
     document.body.classList.toggle("mode-vscode", id === "vscode");
+    document.body.classList.toggle("mode-osupdate", id === "osupdate");
     document.querySelectorAll(".opt-vscode").forEach((el) => {
       el.style.display = id === "vscode" ? "" : "none";
+    });
+    document.querySelectorAll(".opt-osupdate").forEach((el) => {
+      el.style.display = id === "osupdate" ? "" : "none";
     });
     document.querySelectorAll(".scn-opt").forEach((b) =>
       b.classList.toggle("active", b.dataset.scn === id));
